@@ -1,2 +1,3 @@
-# DensifyAtlas
-Tool for interpolating ROIs in a brain atlas
+# densify
+
+Algorithm for upsampling ("densifying") point clouds
