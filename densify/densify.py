@@ -57,6 +57,9 @@ def _interpolate_points(points, simplices, radius):
     simplicial_centroids = simplices.mean(axis=1)
     indices = _filter_centroids_by_radius(simplicial_centroids, points, radius)
 
+    if not indices:
+        return None
+
     return InterpolatedPoints(
         centroids=simplicial_centroids[indices],
         simplices=simplices[indices]
@@ -69,13 +72,14 @@ def _recursively_densify_points(points, radius, iter_results):
     """
 
     simplices = _build_simplicial_complex(points)
-    simplices = _sort_simplices_by_area(simplices)
+    # simplices = _sort_simplices_by_area(simplices)
     new_points = _interpolate_points(points, simplices, radius)
-    iter_results.append(new_points)
 
     if not new_points:
         synthetic_points = np.concatenate([pts.centroids for pts in iter_results], axis=0)
         return synthetic_points, iter_results
+    else:
+        iter_results.append(new_points)
 
     return _recursively_densify_points(
         np.concatenate((points, new_points.centroids), axis=0),
@@ -89,7 +93,7 @@ def _recursively_densify_points(points, radius, iter_results):
 ######
 
 
-def densify(points, radius=1):
+def densify(points, radius=None):
     """
     Parameters
     ----------
