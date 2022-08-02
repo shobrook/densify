@@ -23,10 +23,21 @@ def _build_simplicial_complex(points):
     return simplices # [num_simplices, 3, point_dim]
 
 
+def _calculate_simplex_area(simplex):
+    dp_matrix = np.dot(simplex, simplex.T)
+    coef = 1 / np.math.factorial(simplex.shape[0])
+    area = coef * np.sqrt(np.linalg.det(dp_matrix))
+
+    return area
+
+
 def _sort_simplices_by_area(simplices):
-    AB = simplices[:, 1, :] - simplices[:, 0, :]
-    AC = simplices[:, 2, :] - simplices[:, 0, :]
-    areas = np.linalg.norm(np.cross(AB, AC)) / 2 # BUG: Cross-product returns wrong shape
+    num_simplices = simplices.shape[0]
+    areas = np.zeros(num_simplices)
+    for i in range(num_simplices):
+        simplex = simplices[i]
+        areas[i] = _calculate_simplex_area(simplex)
+
     sort_indices = np.argsort(areas)
 
     return simplices[sort_indices]
@@ -72,7 +83,7 @@ def _recursively_densify_points(points, radius, iter_results):
     """
 
     simplices = _build_simplicial_complex(points)
-    # simplices = _sort_simplices_by_area(simplices)
+    simplices = _sort_simplices_by_area(simplices)
     new_points = _interpolate_points(points, simplices, radius)
 
     if not new_points:
