@@ -15,10 +15,11 @@ InterpolatedPoints = namedtuple("InterpolatedPoints", "centroids simplices")
 #########
 
 
-def _build_simplicial_complex(points):
+def _build_triangulation(points):
     """
-    Takes a set of points in n-dimensional space and uses Delaunay triangulation
-    to build a simplicial complex that covers the convex hull of the set.
+    Takes a set of points in n-dimensional space and computes a Delaunay
+    triangulation, i.e. a simplicial complex that covers the convex hull of the
+    set.
 
     Parameters
     ----------
@@ -28,8 +29,8 @@ def _build_simplicial_complex(points):
     Returns
     -------
     simplices : numpy.ndarray
-        array of simplices representing the complex, defined by their vertices;
-        shape of [num_simplices, num_vertices, n]
+        array of simplices representing the triangulation, defined by their
+        vertices; shape of [num_simplices, num_vertices, n]
     """
 
     triangulation = Delaunay(points)
@@ -169,9 +170,9 @@ def _interpolate_points(points, simplices, radius):
 
 def _recursively_densify_points(points, radius, iter_results):
     """
-    Internal function wrapped by densify. Uses Delaunay triangulation to derive
-    a simplicial complex from a given set of points, calcuulates the centroids
-    of each simplex, and adds those to the point set. Repeats this process
+    Internal function wrapped by densify. Computes a Delaunay triangulation of
+    the given set of points, calculates the centroids of each simplex in the
+    triangulation, and adds them to the point set. Repeats this process
     recursively on the new point set until no new points can be created.
 
     Parameters
@@ -193,7 +194,7 @@ def _recursively_densify_points(points, radius, iter_results):
         iteration of the algorithm
     """
 
-    simplices = _build_simplicial_complex(points)
+    simplices = _build_triangulation(points)
     simplices = _sort_simplices_by_volume(simplices)
     new_points = _interpolate_points(points, simplices, radius)
 
