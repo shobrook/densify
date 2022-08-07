@@ -1,6 +1,6 @@
 # densify
 
-`densify` is an algorithm for [oversampling](https://en.wikipedia.org/wiki/Oversampling_and_undersampling_in_data_analysis) point clouds. It creates synthetic data points to "fill the gaps" in the cloud, making the cloud more dense. This is a useful [technique for reducing overfitting](https://en.wikipedia.org/wiki/Regularization_(mathematics)) when training machine learning models on point cloud datasets.
+`densify` is an algorithm for [oversampling](https://en.wikipedia.org/wiki/Oversampling_and_undersampling_in_data_analysis) point clouds. It creates synthetic data points that "fill the gaps" in the cloud, making it more dense. This can be a useful [technique for reducing overfitting](https://en.wikipedia.org/wiki/Regularization_(mathematics)) when training machine learning models on point cloud datasets.
 
 <!--TODO: Demo-->
 
@@ -14,7 +14,7 @@ $ pip install densify
 
 ## Usage
 
-Using `densify` is very simple. The function expects an array of points representing your cloud and a "radius" that dictates the minimum distance each synthetic point must be from all other points. You can think of radius as a measure of density (i.e. smaller => more dense).
+`densify` is very simple to use. The function expects an array of points representing your cloud and a "radius" that dictates the minimum distance each synthetic point must be from all other points. The smaller the radius, the higher the density.
 
 ```python
 import numpy as np
