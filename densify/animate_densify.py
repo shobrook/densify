@@ -5,12 +5,13 @@ from matplotlib.animation import FuncAnimation
 
 from itertools import combinations
 from dataclasses import dataclass
+from typing import Dict
 from collections import namedtuple
 
 Artists = namedtuple("Artists", "node_paths edge_segments")
 
 EDGE_FRAME_MULTIPLIER = 50 # No. of edge frames per densify iteration
-NODE_FRAME_MULTIPLIER = 5 # No. of frames to show for the addition of a point
+NODE_FRAME_MULTIPLIER = 1 # No. of frames to show for the addition of a point
 
 GREY = (1.0, 1.0, 1.0, 0.75)
 LIGHT_GREY = (0.6, 0.6, 0.6, 1.0)
@@ -30,16 +31,46 @@ def create_final_point_cloud(init_points, iter_results):
 
 def point_cloud_to_graph(final_points, iter_results):
     graph = nx.Graph()
-    graph.add_nodes_from(range(len(final_points)))
+    for node, pos in enumerate(final_points):
+        graph.add_node(node, pos=pos)
 
     # TODO: Clean up and use add_edges_from
     for r in iter_results:
         for simplex in r.simplices:
+            # TODO: Separate argwhere call into its own function
             vertices = np.argwhere(np.logical_not(np.isin(final_points, simplex, invert=True).any(axis=1))).squeeze()
             for edge in combinations(vertices, 2):
                 graph.add_edge(*edge)
 
     return graph
+
+
+######################
+# EDGE SEGMENT HELPERS
+######################
+
+
+def generate_edge_segments(simplices):
+    segments = []
+    for i in range(simplices.shape[0]):
+        vertices = simplices[i]
+        simplex_segments = (np.array(seg) for seg in combinations(vertices, 2))
+
+        segments.extend(simplex_segments)
+
+    return segments
+
+
+def generate_partial_edge_segments(segments, percentage):
+    for segment in segments:
+        src, targ = segment[0], segment[1]
+        midpoint = (src + targ) / 2
+
+        partial_src = midpoint + ((src - midpoint) * percentage)
+        partial_targ = midpoint + ((targ - midpoint) * percentage)
+        partial_segment = np.array([partial_src, partial_targ])
+
+        yield partial_segment
 
 
 ##################
@@ -49,7 +80,7 @@ def point_cloud_to_graph(final_points, iter_results):
 
 @dataclass
 class NodeFrame:
-    node_paths: np.ndarray
+    nodelist: np.ndarray
 
 
 @dataclass
@@ -59,18 +90,13 @@ class EdgeFrame:
 
 
 def generate_edge_frames(simplices):
-    segments = []
-    for i in range(simplices.shape[0]):
-        vertices = simplices[i]
-        simplex_segments = (np.array(seg) for seg in combinations(vertices, 2))
-        segments.extend(simplex_segments)
-
+    segments = generate_edge_segments(simplices)
     for i in range(EDGE_FRAME_MULTIPLIER):
         yield EdgeFrame(segments, percentage=i / EDGE_FRAME_MULTIPLIER)
 
 
 def generate_node_frames(curr_points, prior_points, final_points):
-    node_indices = np.argwhere(np.isin(curr_points, final_points).all(axis=1))
+    node_indices = np.argwhere(np.isin(final_points, curr_points).all(axis=1))
     prior_points = prior_points.squeeze()
     for node_index in node_indices:
         prior_points = np.concatenate([prior_points, node_index])
@@ -95,23 +121,6 @@ def generate_frames(init_points, final_points, iter_results):
     return frames
 
 
-#
-#
-#
-
-
-def generate_edge_segments(segments, percentage):
-    for segment in segments:
-        src, targ = segment[0], segment[1]
-        midpoint = (src + targ) / 2
-
-        partial_src = midpoint + ((src - midpoint) * percentage)
-        partial_targ = midpoint + ((targ - midpoint) * percentage)
-        partial_segment = np.array([partial_src, partial_targ])
-
-        yield partial_segment
-
-
 ######
 # MAIN
 ######
@@ -133,8 +142,6 @@ class Animation(object):
         self.fig, self.ax0 = plt.subplots()
         self.artists = None
 
-        self.pos = {i: self.final_points[i] for i in range(len(self.final_points))}
-
         # Animation frames
         self.frames = generate_frames(init_points, self.final_points, iter_results)
 
@@ -142,24 +149,19 @@ class Animation(object):
         for spine in self.ax0.spines.values():
             spine.set_visible(False)
 
-        # TODO: Probably a better way to do this; move into function that creates node paths for given points
-        nodes_to_keep = np.argwhere(np.isin(self.init_points, self.final_points).all(axis=1)).squeeze()
-        nodes_to_remove = np.argwhere(np.isin(self.final_points, self.init_points, invert=True).any(axis=1)).squeeze()
-
-        init_graph = self.final_graph.copy()
-        init_graph.remove_nodes_from(nodes_to_remove)
-
+        init_nodes = np.argwhere(np.isin(self.init_points, self.final_points).all(axis=1)).squeeze()
         node_paths = nx.draw_networkx_nodes(
-            init_graph,
-            pos={i: self.final_points[i] for i in nodes_to_keep},
+            self.final_graph,
+            pos=nx.get_node_attributes(self.final_graph, "pos"),
             node_color="white" if self.is_dark else LIGHT_GREY,
             node_size=15,
+            nodelist=init_nodes,
             # linewidths=34 / len(self.final_points), # Pull out into variable/method
             ax=self.ax0
         )
         edge_segments = nx.draw_networkx_edges(
             self.final_graph,
-            pos=self.pos,
+            pos=nx.get_node_attributes(self.final_graph, "pos"),
             edge_color="white" if self.is_dark else LIGHT_GREY, # GREY
             # ax=self.ax0
             # width=34 / len(self.final_points)
@@ -170,12 +172,23 @@ class Animation(object):
 
     def update(self, i):
         frame = self.frames[i]
+
         if isinstance(frame, EdgeFrame):
-            segments = generate_edge_segments(frame.edge_segments, frame.percentage)
+            segments = generate_partial_edge_segments(frame.edge_segments, frame.percentage)
             self.artists.edge_segments.set_segments(segments)
         elif isinstance(frame, NodeFrame):
-            pass
-            # self.artists.node_paths = frame.node_paths
+            self.artists = Artists(
+                nx.draw_networkx_nodes(
+                    self.final_graph,
+                    pos=nx.get_node_attributes(self.final_graph, "pos"),
+                    node_color="white" if self.is_dark else LIGHT_GREY,
+                    node_size=15,
+                    nodelist=frame.nodelist,
+                    # linewidths=34 / len(self.final_points), # Pull out into variable/method
+                    ax=self.ax0
+                ),
+                self.artists.edge_segments
+            )
 
         return self.artists
 
@@ -201,7 +214,7 @@ if __name__ == "__main__":
                        [6.1, 5.0],
                        [1.1, 2.9],
                        [10.0, 5.0]])
-    new_points, iter_results = densify(points, radius=0.5)
+    new_points, iter_results = densify(points, radius=0.25)
 
     anim = Animation(points, iter_results)
     anim.show()
