@@ -10,19 +10,24 @@ from collections import namedtuple
 
 Artists = namedtuple("Artists", "node_paths edge_segments")
 
-INIT_FIG_MULTIPLIER = 50
+INIT_FRAME_MULTIPLIER = 50
 EDGE_FRAME_MULTIPLIER = 50 # No. of edge frames per densify iteration
 NODE_FRAME_MULTIPLIER = 1 # No. of frames to show for the addition of a point
+FINAL_FRAME_MULTIPLIER = 50
 
 DARK_NODE_COLOR = "white"
 LIGHT_NODE_COLOR = (1.0, 1.0, 1.0, 0.75)
-GREY = (1.0, 1.0, 1.0, 0.25)
-LIGHT_GREY = (0.6, 0.6, 0.6, 1.0)
+DARK_EDGE_COLOR = (0.6, 0.6, 0.6, 1.0)
+LIGHT_EDGE_COLOR = (1.0, 1.0, 1.0, 0.5)
 
 
 #####################
 # POINT CLOUD HELPERS
 #####################
+
+
+def points_to_nodes(points, final_points):
+    return np.atleast_1d(np.argwhere(np.isin(final_points, points).all(axis=1)).squeeze())
 
 
 def create_final_point_cloud(init_points, iter_results):
@@ -40,8 +45,7 @@ def point_cloud_to_graph(final_points, iter_results):
     # TODO: Clean up and use add_edges_from
     for r in iter_results:
         for simplex in r.simplices:
-            # TODO: Separate argwhere call into its own function
-            vertices = np.argwhere(np.logical_not(np.isin(final_points, simplex, invert=True).any(axis=1))).squeeze()
+            vertices = points_to_nodes(simplex, final_points)
             for edge in combinations(vertices, 2):
                 graph.add_edge(*edge)
 
@@ -82,46 +86,42 @@ def generate_partial_edge_segments(segments, percentage):
 
 
 @dataclass
-class NodeFrame:
-    nodelist: np.ndarray
+class Frame:
+    nodelist: np.ndarray = np.array([])
+    edge_segments: np.ndarray = np.array([])
+    edge_percentage: float = 0.0
 
 
-@dataclass
-class EdgeFrame:
-    edge_segments: np.ndarray
-    percentage: float = 0.0
-
-
-def generate_edge_frames(simplices):
-    segments = generate_edge_segments(simplices)
+def generate_edge_frames(edge_segments, prior_nodes):
     for i in range(EDGE_FRAME_MULTIPLIER):
-        yield EdgeFrame(segments, percentage=i / EDGE_FRAME_MULTIPLIER)
+        edge_percentage = i / EDGE_FRAME_MULTIPLIER
+        yield Frame(prior_nodes, edge_segments, edge_percentage)
 
 
-def generate_node_frames(curr_points, prior_points, final_points):
-    node_indices = np.argwhere(np.isin(final_points, curr_points).all(axis=1))
-    prior_points = prior_points.squeeze()
-    for node_index in node_indices:
-        prior_points = np.concatenate([prior_points, node_index])
+def generate_node_frames(curr_nodes, prior_nodes, edge_segments):
+    for node in curr_nodes:
+        prior_nodes = np.concatenate([prior_nodes, np.atleast_1d(node)])
 
         for _ in range(NODE_FRAME_MULTIPLIER):
-            yield NodeFrame(prior_points)
+            yield Frame(prior_nodes, edge_segments, edge_percentage=1.0)
 
 
-def generate_frames(init_points, final_points, iter_results):
-    prior_points = np.argwhere(np.isin(init_points, final_points).all(axis=1))
-    frames = []
+def generate_frames(init_nodes, final_points, iter_results):
+    for _ in range(INIT_FRAME_MULTIPLIER):
+        yield Frame(init_nodes)
+
+    prior_nodes = init_nodes
     for result in iter_results:
-        edge_frames = generate_edge_frames(result.simplices)
-        node_frames = generate_node_frames(result.centroids, prior_points, final_points)
+        curr_nodes = points_to_nodes(result.centroids, final_points)
+        edge_segments = generate_edge_segments(result.simplices)
 
-        frames.extend(edge_frames)
-        frames.extend(node_frames)
+        yield from generate_edge_frames(edge_segments, prior_nodes)
+        yield from generate_node_frames(curr_nodes, prior_nodes, edge_segments)
 
-        centroid_indices = np.argwhere(np.isin(result.centroids, final_points).all(axis=1))
-        prior_points = np.concatenate([prior_points, centroid_indices])
+        prior_nodes = np.concatenate([prior_nodes, curr_nodes])
 
-    return frames
+    for _ in range(FINAL_FRAME_MULTIPLIER):
+        yield Frame(np.arange(final_points.shape[0]))
 
 
 ######
@@ -133,9 +133,9 @@ class Animation(object):
     def __init__(self, init_points, iter_results, dark=True, seed=2):
         np.random.seed(seed)
 
-        self.init_points = init_points # Needed?
-        self.final_points = create_final_point_cloud(init_points, iter_results) # Does it need to be an instance variable?
-        self.final_graph = point_cloud_to_graph(self.final_points, iter_results)
+        final_points = create_final_point_cloud(init_points, iter_results)
+        self.final_graph = point_cloud_to_graph(final_points, iter_results)
+        self.init_nodes = points_to_nodes(init_points, final_points)
 
         self.is_dark = dark
         plt.rcParams["figure.facecolor"] = "black" if dark else "white"
@@ -145,65 +145,37 @@ class Animation(object):
         self.artists = None
 
         # Animation frames
-        self.frames = generate_frames(init_points, self.final_points, iter_results)
+        self.frames = list(generate_frames(self.init_nodes, final_points, iter_results))
 
-    def init_fig(self):
-        for spine in self.ax0.spines.values():
-            spine.set_visible(False)
+    def update(self, i):
+        if self.artists:
+            self.artists.node_paths.remove()
+            self.artists.edge_segments.remove()
 
-        init_nodes = np.argwhere(np.isin(self.init_points, self.final_points).all(axis=1)).squeeze()
+        frame = self.frames[i]
         node_paths = nx.draw_networkx_nodes(
             self.final_graph,
             pos=nx.get_node_attributes(self.final_graph, "pos"),
-            node_color=DARK_NODE_COLOR if self.is_dark else LIGHT_GREY,
+            node_color=DARK_NODE_COLOR if self.is_dark else LIGHT_NODE_COLOR,
             node_size=15,
-            nodelist=init_nodes,
-            # linewidths=34 / len(self.final_points), # Pull out into variable/method
+            nodelist=frame.nodelist,
             ax=self.ax0
         )
         edge_segments = nx.draw_networkx_edges(
             self.final_graph,
             pos=nx.get_node_attributes(self.final_graph, "pos"),
-            edge_color="white" if self.is_dark else LIGHT_GREY, # GREY
-            # ax=self.ax0
-            width=34 / len(self.final_points)
-            # edgelist=[]
+            edge_color=DARK_EDGE_COLOR if self.is_dark else LIGHT_EDGE_COLOR,
+            width=34 / self.final_graph.number_of_nodes()
         )
+        partial_edge_segments = generate_partial_edge_segments(frame.edge_segments, frame.edge_percentage)
+        edge_segments.set_segments(partial_edge_segments)
+
         self.artists = Artists(node_paths, edge_segments)
-        self.artists.edge_segments.set_segments([])
-
-        return self.artists
-
-    def update(self, i):
-        if i < INIT_FIG_MULTIPLIER:
-            return self.artists
-        else:
-            i -= INIT_FIG_MULTIPLIER
-
-        frame = self.frames[i]
-
-        if isinstance(frame, EdgeFrame):
-            segments = generate_partial_edge_segments(frame.edge_segments, frame.percentage)
-            self.artists.edge_segments.set_segments(segments)
-        elif isinstance(frame, NodeFrame):
-            self.artists.node_paths.remove()
-            self.artists = Artists(
-                nx.draw_networkx_nodes(
-                    self.final_graph,
-                    pos=nx.get_node_attributes(self.final_graph, "pos"),
-                    node_color=DARK_NODE_COLOR if self.is_dark else LIGHT_GREY,
-                    node_size=15,
-                    nodelist=frame.nodelist,
-                    # linewidths=34 / len(self.final_points), # Pull out into variable/method
-                    ax=self.ax0
-                ),
-                self.artists.edge_segments
-            )
 
         return self.artists
 
     def show(self, duration=15, filename=None, dpi=None):
-        num_frames = len(self.frames) + INIT_FIG_MULTIPLIER
+        num_frames = len(self.frames)
         interval = (1000 * duration) / num_frames
         fps = num_frames / duration
 
@@ -211,7 +183,6 @@ class Animation(object):
             self.fig,
             self.update,
             frames=num_frames,
-            init_func=self.init_fig,
             interval=interval if not filename else fps,
             blit=False,
             repeat=False
