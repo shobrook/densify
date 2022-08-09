@@ -14,7 +14,7 @@ $ pip install densify
 
 ## Usage
 
-`densify` is very simple to use. The function expects an array of points representing your cloud and a "radius" that dictates the minimum distance each synthetic point must be from all other points. The smaller the radius, the higher the density.
+`densify` is simple to use. The function expects an array of points representing your cloud and a "radius" that dictates the minimum distance each synthetic point must be from all other points. The smaller the radius, the higher the density.
 
 ```python
 import numpy as np
