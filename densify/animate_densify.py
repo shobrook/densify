@@ -10,10 +10,13 @@ from collections import namedtuple
 
 Artists = namedtuple("Artists", "node_paths edge_segments")
 
+INIT_FIG_MULTIPLIER = 50
 EDGE_FRAME_MULTIPLIER = 50 # No. of edge frames per densify iteration
 NODE_FRAME_MULTIPLIER = 1 # No. of frames to show for the addition of a point
 
-GREY = (1.0, 1.0, 1.0, 0.75)
+DARK_NODE_COLOR = "white"
+LIGHT_NODE_COLOR = (1.0, 1.0, 1.0, 0.75)
+GREY = (1.0, 1.0, 1.0, 0.25)
 LIGHT_GREY = (0.6, 0.6, 0.6, 1.0)
 
 
@@ -138,8 +141,7 @@ class Animation(object):
         plt.rcParams["figure.facecolor"] = "black" if dark else "white"
         plt.rcParams["axes.facecolor"] = "black" if dark else "white"
 
-        # self.fig, (self.ax0, self.ax1) = plt.subplots(1, 2, figsize=(12, 6))
-        self.fig, self.ax0 = plt.subplots()
+        self.fig, self.ax0 = plt.subplots(figsize=(12, 6))
         self.artists = None
 
         # Animation frames
@@ -153,7 +155,7 @@ class Animation(object):
         node_paths = nx.draw_networkx_nodes(
             self.final_graph,
             pos=nx.get_node_attributes(self.final_graph, "pos"),
-            node_color="white" if self.is_dark else LIGHT_GREY,
+            node_color=DARK_NODE_COLOR if self.is_dark else LIGHT_GREY,
             node_size=15,
             nodelist=init_nodes,
             # linewidths=34 / len(self.final_points), # Pull out into variable/method
@@ -164,13 +166,20 @@ class Animation(object):
             pos=nx.get_node_attributes(self.final_graph, "pos"),
             edge_color="white" if self.is_dark else LIGHT_GREY, # GREY
             # ax=self.ax0
-            # width=34 / len(self.final_points)
+            width=34 / len(self.final_points)
+            # edgelist=[]
         )
         self.artists = Artists(node_paths, edge_segments)
+        self.artists.edge_segments.set_segments([])
 
         return self.artists
 
     def update(self, i):
+        if i < INIT_FIG_MULTIPLIER:
+            return self.artists
+        else:
+            i -= INIT_FIG_MULTIPLIER
+
         frame = self.frames[i]
 
         if isinstance(frame, EdgeFrame):
@@ -181,7 +190,7 @@ class Animation(object):
                 nx.draw_networkx_nodes(
                     self.final_graph,
                     pos=nx.get_node_attributes(self.final_graph, "pos"),
-                    node_color="white" if self.is_dark else LIGHT_GREY,
+                    node_color=DARK_NODE_COLOR if self.is_dark else LIGHT_GREY,
                     node_size=15,
                     nodelist=frame.nodelist,
                     # linewidths=34 / len(self.final_points), # Pull out into variable/method
@@ -193,15 +202,18 @@ class Animation(object):
         return self.artists
 
     def show(self, duration=15, filename=None, dpi=None):
-        fps = int(len(self.frames) / duration)
+        num_frames = len(self.frames) + INIT_FIG_MULTIPLIER
+        interval = (1000 * duration) / num_frames
+        fps = num_frames / duration
+
         anim = FuncAnimation(
             self.fig,
             self.update,
-            frames=len(self.frames),
+            frames=num_frames,
             init_func=self.init_fig,
-            interval=1000 / fps if not filename else 200,
-            # save_count
-            blit=False
+            interval=interval if not filename else fps,
+            blit=False,
+            repeat=False
         )
         plt.show()
 
