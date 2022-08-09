@@ -186,6 +186,7 @@ class Animation(object):
             segments = generate_partial_edge_segments(frame.edge_segments, frame.percentage)
             self.artists.edge_segments.set_segments(segments)
         elif isinstance(frame, NodeFrame):
+            self.artists.node_paths.remove()
             self.artists = Artists(
                 nx.draw_networkx_nodes(
                     self.final_graph,
