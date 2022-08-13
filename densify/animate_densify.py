@@ -7,12 +7,13 @@ from itertools import combinations
 from dataclasses import dataclass
 from typing import Dict
 from collections import namedtuple
+from math import ceil
 
 Artists = namedtuple("Artists", "node_paths edge_segments")
 
 INIT_FRAME_MULTIPLIER = 50
 EDGE_FRAME_MULTIPLIER = 50 # No. of edge frames per densify iteration
-NODE_FRAME_MULTIPLIER = 1 # No. of frames to show for the addition of a point
+NODE_FRAME_MULTIPLIER = 25 # No. of frames to show for the addition of a point
 FINAL_FRAME_MULTIPLIER = 50
 
 DARK_NODE_COLOR = "white"
@@ -102,7 +103,8 @@ def generate_node_frames(curr_nodes, prior_nodes, edge_segments):
     for node in curr_nodes:
         prior_nodes = np.concatenate([prior_nodes, np.atleast_1d(node)])
 
-        for _ in range(NODE_FRAME_MULTIPLIER):
+        num_frames = min(NODE_FRAME_MULTIPLIER, ceil(NODE_FRAME_MULTIPLIER / len(curr_nodes)))
+        for _ in range(num_frames):
             yield Frame(prior_nodes, edge_segments, edge_percentage=1.0)
 
 
@@ -165,7 +167,9 @@ class Animation(object):
             self.final_graph,
             pos=nx.get_node_attributes(self.final_graph, "pos"),
             edge_color=DARK_EDGE_COLOR if self.is_dark else LIGHT_EDGE_COLOR,
-            width=34 / self.final_graph.number_of_nodes()
+            # width=34 / self.final_graph.number_of_nodes()
+            # width=15 / len(frame.nodelist)
+            width=0.75
         )
         partial_edge_segments = generate_partial_edge_segments(frame.edge_segments, frame.edge_percentage)
         edge_segments.set_segments(partial_edge_segments)
@@ -198,7 +202,14 @@ if __name__ == "__main__":
                        [6.1, 5.0],
                        [1.1, 2.9],
                        [10.0, 5.0]])
-    new_points, iter_results = densify(points, radius=0.25)
+    new_points, iter_results = densify(points, radius=0.15)
 
     anim = Animation(points, iter_results)
     anim.show()
+
+
+    # TODO: Make initial nodes a different color
+        # OR a gradient! Start out white and make more red with each iteration
+    # TODO: Make a separate graph for density over time
+    # TODO: Give a title
+    # TODO: Try out Paul's suggestion
