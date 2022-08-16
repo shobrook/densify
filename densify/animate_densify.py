@@ -273,7 +273,19 @@ class Animation(object):
             blit=False,
             repeat=False
         )
-        plt.show()
+
+        if not filename:
+            plt.show()
+        else:
+            anim.save(filename, fps=fps, dpi=dpi)
+
+        return anim
+
+
+def animate_densify(init_points, iter_results, dark=True, duration=15,
+                    filename=None, dpi=None):
+    anim = Animation(init_points, iter_results, dark)
+    return anim.show(duration, filename, dpi)
 
 
 if __name__ == "__main__":
@@ -286,8 +298,7 @@ if __name__ == "__main__":
                        [10.0, 5.0]])
     new_points, iter_results = densify(points, radius=0.15)
 
-    anim = Animation(points, iter_results, dark=True)
-    anim.show()
+    animate_densify(points, iter_results)
 
     # TODO: Implement Paul's suggestion
     # TODO: Implement a color gradient for the nodes
