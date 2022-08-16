@@ -99,7 +99,7 @@ def area_of_2d_convex_hull(vertices):
 
 def calculate_point_cloud_density(points, convex_hull):
     area = area_of_2d_convex_hull(convex_hull)
-    return len(points) / area
+    return round(len(points) / area, 3)
 
 
 ######################
@@ -216,26 +216,6 @@ class Animation(object):
 
         return node_colors
 
-    def init_fig(self):
-        text_args = {
-            "x": 0.5,
-            "y": 1.05,
-            "size": plt.rcParams["axes.titlesize"],
-            "ha": "center",
-            "color": DARK_TITLE_COLOR if self.is_dark else LIGHT_TITLE_COLOR
-        }
-        ax0_title = self.ax0.text(s="Input Point Cloud", transform=self.ax0.transAxes, **text_args)
-
-        for spine in self.ax0.spines.values():
-            spine.set_visible(False)
-
-        plt.tight_layout(pad=3.0)
-
-        self.artists = self.update(0)
-        self.artists.title = ax0_title
-
-        return self.artists
-
     def update(self, i):
         if self.artists:
             self.artists.node_paths.remove()
@@ -284,7 +264,6 @@ class Animation(object):
             self.fig,
             self.update,
             frames=num_frames,
-            # init_func=self.init_fig,
             interval=interval if not filename else fps,
             blit=False,
             repeat=False
@@ -307,4 +286,3 @@ if __name__ == "__main__":
 
     # TODO: Implement Paul's suggestion
     # TODO: Implement a color gradient for the nodes
-    # TODO: Make a separate graph for density over time
