@@ -18,13 +18,15 @@ NODE_FRAME_MULTIPLIER = 25 # No. of frames to show for the addition of a point
 FINAL_FRAME_MULTIPLIER = 50
 
 DARK_TITLE_COLOR = "white"
-LIGHT_TITLE_COLOR = (0.6, 0.6, 0.6, 1.0)
-DARK_SPINE_COLOR = (0.6, 0.6, 0.6, 1.0)
-LIGHT_SPINE_COLOR = (1.0, 1.0, 1.0, 0.5)
+LIGHT_TITLE_COLOR = (0.3, 0.3, 0.3, 1.0)
 DARK_NODE_COLOR = "white"
-LIGHT_NODE_COLOR = (1.0, 1.0, 1.0, 0.75)
+LIGHT_NODE_COLOR = (0.3, 0.3, 0.3, 1.0)
 DARK_EDGE_COLOR = (0.6, 0.6, 0.6, 1.0)
-LIGHT_EDGE_COLOR = (1.0, 1.0, 1.0, 0.5)
+LIGHT_EDGE_COLOR = (0.6, 0.6, 0.6, 1.0)
+# RED = (0.69, 0.05, 0.18, 1.0)
+RED = "red"
+DARK_BACKGROUND = (0.05, 0.05, 0.05, 1.0)
+LIGHT_BACKGROUND = "white"
 
 
 ##############
@@ -190,16 +192,14 @@ def generate_frames(init_nodes, final_points, iter_results):
 
 
 class Animation(object):
-    def __init__(self, init_points, iter_results, dark=True, seed=2):
-        np.random.seed(seed)
-
+    def __init__(self, init_points, iter_results, dark=True):
         final_points = create_final_point_cloud(init_points, iter_results)
         self.final_graph = point_cloud_to_graph(final_points, iter_results)
         self.init_nodes = points_to_nodes(init_points, final_points)
 
         self.is_dark = dark
-        plt.rcParams["figure.facecolor"] = "black" if dark else "white"
-        plt.rcParams["axes.facecolor"] = "black" if dark else "white"
+        plt.rcParams["figure.facecolor"] = DARK_BACKGROUND if dark else LIGHT_BACKGROUND
+        plt.rcParams["axes.facecolor"] = DARK_BACKGROUND if dark else LIGHT_BACKGROUND
 
         self.fig, self.ax0 = plt.subplots(figsize=(12, 6))
         self.artists = None
@@ -212,9 +212,13 @@ class Animation(object):
         num_total_nodes = len(frame.nodelist)
 
         node_colors = [DARK_NODE_COLOR if self.is_dark else LIGHT_NODE_COLOR for _ in range(num_init_nodes)]
-        node_colors += ["red" for _ in range(num_init_nodes, num_total_nodes)]
+        node_colors += [RED for _ in range(num_init_nodes, num_total_nodes)]
 
         return node_colors
+
+    def init_fig(self):
+        for spine in self.ax0.spines.values():
+            spine.set_visible(False)
 
     def update(self, i):
         if self.artists:
@@ -263,6 +267,7 @@ class Animation(object):
         anim = FuncAnimation(
             self.fig,
             self.update,
+            init_func=self.init_fig,
             frames=num_frames,
             interval=interval if not filename else fps,
             blit=False,
@@ -281,7 +286,7 @@ if __name__ == "__main__":
                        [10.0, 5.0]])
     new_points, iter_results = densify(points, radius=0.15)
 
-    anim = Animation(points, iter_results)
+    anim = Animation(points, iter_results, dark=True)
     anim.show()
 
     # TODO: Implement Paul's suggestion
