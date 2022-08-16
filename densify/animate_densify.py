@@ -2,6 +2,9 @@ import numpy as np
 import networkx as nx
 import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation
+from matplotlib.collections import PathCollection, LineCollection
+from matplotlib.text import Text
+from scipy.spatial import ConvexHull
 
 from itertools import combinations
 from dataclasses import dataclass
@@ -9,17 +12,40 @@ from typing import Dict
 from collections import namedtuple
 from math import ceil
 
-Artists = namedtuple("Artists", "node_paths edge_segments")
-
 INIT_FRAME_MULTIPLIER = 50
 EDGE_FRAME_MULTIPLIER = 50 # No. of edge frames per densify iteration
 NODE_FRAME_MULTIPLIER = 25 # No. of frames to show for the addition of a point
 FINAL_FRAME_MULTIPLIER = 50
 
+DARK_TITLE_COLOR = "white"
+LIGHT_TITLE_COLOR = (0.6, 0.6, 0.6, 1.0)
+DARK_SPINE_COLOR = (0.6, 0.6, 0.6, 1.0)
+LIGHT_SPINE_COLOR = (1.0, 1.0, 1.0, 0.5)
 DARK_NODE_COLOR = "white"
 LIGHT_NODE_COLOR = (1.0, 1.0, 1.0, 0.75)
 DARK_EDGE_COLOR = (0.6, 0.6, 0.6, 1.0)
 LIGHT_EDGE_COLOR = (1.0, 1.0, 1.0, 0.5)
+
+
+##############
+# DATA CLASSES
+##############
+
+
+@dataclass
+class Frame:
+    nodelist: np.ndarray = np.array([])
+    edge_segments: np.ndarray = np.array([])
+    edge_percentage: float = 0.0
+    iter_num: int = 0
+    density: float = 0.0
+
+
+@dataclass
+class Artists:
+    node_paths: PathCollection = PathCollection([])
+    edge_segments: LineCollection = LineCollection([])
+    title: Text = Text()
 
 
 #####################
@@ -51,6 +77,29 @@ def point_cloud_to_graph(final_points, iter_results):
                 graph.add_edge(*edge)
 
     return graph
+
+
+def point_cloud_to_convex_hull(points):
+    hull = ConvexHull(points)
+
+    x, y = points[hull.vertices, 0], points[hull.vertices, 1]
+    vertices = np.column_stack((x, y))
+
+    return vertices
+
+
+def area_of_2d_convex_hull(vertices):
+    # https://en.wikipedia.org/wiki/Shoelace_formula#Statement
+    A = 0.0
+    for i in range(-1, vertices.shape[0] - 1):
+        A += vertices[i][0] * (vertices[i + 1][1] - vertices[i - 1][1])
+
+    return A / 2
+
+
+def calculate_point_cloud_density(points, convex_hull):
+    area = area_of_2d_convex_hull(convex_hull)
+    return len(points) / area
 
 
 ######################
@@ -86,17 +135,10 @@ def generate_partial_edge_segments(segments, percentage):
 ##################
 
 
-@dataclass
-class Frame:
-    nodelist: np.ndarray = np.array([])
-    edge_segments: np.ndarray = np.array([])
-    edge_percentage: float = 0.0
-
-
 def generate_edge_frames(edge_segments, prior_nodes):
     for i in range(EDGE_FRAME_MULTIPLIER):
         edge_percentage = i / EDGE_FRAME_MULTIPLIER
-        yield Frame(prior_nodes, edge_segments, edge_percentage)
+        yield Frame(nodelist=prior_nodes, edge_segments=edge_segments, edge_percentage=edge_percentage)
 
 
 def generate_node_frames(curr_nodes, prior_nodes, edge_segments):
@@ -105,25 +147,41 @@ def generate_node_frames(curr_nodes, prior_nodes, edge_segments):
 
         num_frames = min(NODE_FRAME_MULTIPLIER, ceil(NODE_FRAME_MULTIPLIER / len(curr_nodes)))
         for _ in range(num_frames):
-            yield Frame(prior_nodes, edge_segments, edge_percentage=1.0)
+            yield Frame(nodelist=prior_nodes, edge_segments=edge_segments, edge_percentage=1.0)
+
+
+def set_metadata_for_frames(frames, convex_hull, iter_num):
+    for frame in frames:
+        frame.iter_num = iter_num + 1
+        frame.density = calculate_point_cloud_density(frame.nodelist, convex_hull)
+
+        yield frame
 
 
 def generate_frames(init_nodes, final_points, iter_results):
+    convex_hull = point_cloud_to_convex_hull(final_points[init_nodes])
+    init_density = calculate_point_cloud_density(init_nodes, convex_hull)
+
     for _ in range(INIT_FRAME_MULTIPLIER):
-        yield Frame(init_nodes)
+        yield Frame(nodelist=init_nodes, density=init_density)
 
     prior_nodes = init_nodes
-    for result in iter_results:
+    for iter_num, result in enumerate(iter_results):
         curr_nodes = points_to_nodes(result.centroids, final_points)
         edge_segments = generate_edge_segments(result.simplices)
 
-        yield from generate_edge_frames(edge_segments, prior_nodes)
-        yield from generate_node_frames(curr_nodes, prior_nodes, edge_segments)
+        edge_frames = generate_edge_frames(edge_segments, prior_nodes)
+        node_frames = generate_node_frames(curr_nodes, prior_nodes, edge_segments)
+
+        yield from set_metadata_for_frames(edge_frames, convex_hull, iter_num)
+        yield from set_metadata_for_frames(node_frames, convex_hull, iter_num)
 
         prior_nodes = np.concatenate([prior_nodes, curr_nodes])
 
+    final_density = calculate_point_cloud_density(final_points, convex_hull)
+
     for _ in range(FINAL_FRAME_MULTIPLIER):
-        yield Frame(np.arange(final_points.shape[0]))
+        yield Frame(nodelist=np.arange(final_points.shape[0]), density=final_density)
 
 
 ######
@@ -149,16 +207,55 @@ class Animation(object):
         # Animation frames
         self.frames = list(generate_frames(self.init_nodes, final_points, iter_results))
 
+    def _get_node_colors(self, frame):
+        num_init_nodes = len(self.init_nodes)
+        num_total_nodes = len(frame.nodelist)
+
+        node_colors = [DARK_NODE_COLOR if self.is_dark else LIGHT_NODE_COLOR for _ in range(num_init_nodes)]
+        node_colors += ["red" for _ in range(num_init_nodes, num_total_nodes)]
+
+        return node_colors
+
+    def init_fig(self):
+        text_args = {
+            "x": 0.5,
+            "y": 1.05,
+            "size": plt.rcParams["axes.titlesize"],
+            "ha": "center",
+            "color": DARK_TITLE_COLOR if self.is_dark else LIGHT_TITLE_COLOR
+        }
+        ax0_title = self.ax0.text(s="Input Point Cloud", transform=self.ax0.transAxes, **text_args)
+
+        for spine in self.ax0.spines.values():
+            spine.set_visible(False)
+
+        plt.tight_layout(pad=3.0)
+
+        self.artists = self.update(0)
+        self.artists.title = ax0_title
+
+        return self.artists
+
     def update(self, i):
         if self.artists:
             self.artists.node_paths.remove()
             self.artists.edge_segments.remove()
+            self.artists.title.remove()
 
         frame = self.frames[i]
+        title = self.ax0.text(
+            s=f"Iteration #{frame.iter_num} (density={frame.density})",
+            transform=self.ax0.transAxes,
+            x=0.5,
+            y=1.05,
+            size=plt.rcParams["axes.titlesize"],
+            ha="center",
+            color=DARK_TITLE_COLOR if self.is_dark else LIGHT_TITLE_COLOR
+        )
         node_paths = nx.draw_networkx_nodes(
             self.final_graph,
             pos=nx.get_node_attributes(self.final_graph, "pos"),
-            node_color=DARK_NODE_COLOR if self.is_dark else LIGHT_NODE_COLOR,
+            node_color=self._get_node_colors(frame),
             node_size=15,
             nodelist=frame.nodelist,
             ax=self.ax0
@@ -167,14 +264,14 @@ class Animation(object):
             self.final_graph,
             pos=nx.get_node_attributes(self.final_graph, "pos"),
             edge_color=DARK_EDGE_COLOR if self.is_dark else LIGHT_EDGE_COLOR,
-            # width=34 / self.final_graph.number_of_nodes()
             # width=15 / len(frame.nodelist)
-            width=0.75
+            width=0.75,
+            ax=self.ax0
         )
         partial_edge_segments = generate_partial_edge_segments(frame.edge_segments, frame.edge_percentage)
         edge_segments.set_segments(partial_edge_segments)
 
-        self.artists = Artists(node_paths, edge_segments)
+        self.artists = Artists(node_paths, edge_segments, title)
 
         return self.artists
 
@@ -187,6 +284,7 @@ class Animation(object):
             self.fig,
             self.update,
             frames=num_frames,
+            # init_func=self.init_fig,
             interval=interval if not filename else fps,
             blit=False,
             repeat=False
@@ -207,9 +305,6 @@ if __name__ == "__main__":
     anim = Animation(points, iter_results)
     anim.show()
 
-
-    # TODO: Make initial nodes a different color
-        # OR a gradient! Start out white and make more red with each iteration
+    # TODO: Implement Paul's suggestion
+    # TODO: Implement a color gradient for the nodes
     # TODO: Make a separate graph for density over time
-    # TODO: Give a title
-    # TODO: Try out Paul's suggestion
