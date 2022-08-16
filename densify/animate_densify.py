@@ -7,8 +7,8 @@ from matplotlib.text import Text
 from scipy.spatial import ConvexHull
 
 from itertools import combinations
-from dataclasses import dataclass, field
-from typing import List
+from dataclasses import dataclass
+from typing import Dict
 from collections import namedtuple
 from math import ceil
 
@@ -45,9 +45,7 @@ class Frame:
 class Artists:
     node_paths: PathCollection = PathCollection([])
     edge_segments: LineCollection = LineCollection([])
-    ax0_title: Text = Text()
-    ax1_title: Text = Text()
-    density_curve: List = field(default_factory=list)
+    title: Text = Text()
 
 
 #####################
@@ -101,7 +99,7 @@ def area_of_2d_convex_hull(vertices):
 
 def calculate_point_cloud_density(points, convex_hull):
     area = area_of_2d_convex_hull(convex_hull)
-    return round(len(points) / area, 3)
+    return len(points) / area
 
 
 ######################
@@ -183,11 +181,7 @@ def generate_frames(init_nodes, final_points, iter_results):
     final_density = calculate_point_cloud_density(final_points, convex_hull)
 
     for _ in range(FINAL_FRAME_MULTIPLIER):
-        yield Frame(
-            nodelist=np.arange(final_points.shape[0]),
-            density=final_density,
-            iter_num=iter_num
-        )
+        yield Frame(nodelist=np.arange(final_points.shape[0]), density=final_density)
 
 
 ######
@@ -207,7 +201,7 @@ class Animation(object):
         plt.rcParams["figure.facecolor"] = "black" if dark else "white"
         plt.rcParams["axes.facecolor"] = "black" if dark else "white"
 
-        self.fig, (self.ax0, self.ax1) = plt.subplots(1, 2, figsize=(12, 6))
+        self.fig, self.ax0 = plt.subplots(figsize=(12, 6))
         self.artists = None
 
         # Animation frames
@@ -222,61 +216,35 @@ class Animation(object):
 
         return node_colors
 
-    def _get_density_curve(self, curr_frame, curr_index):
-        if not curr_frame.iter_num:
-            return [], []
-
-        x, y = [], []
-        seen = set()
-        for index, frame in enumerate(self.frames):
-            # Ignore frames after current one
-            if index > curr_index:
-                break
-
-            # Ignore init frames
-            if not frame.iter_num:
-                continue
-
-            # Ignore edge update frames
-            if tuple(frame.nodelist) in seen:
-                continue
-
-            x.append(index - len(self.init_nodes))
-            y.append(frame.density)
-            seen.add(tuple(frame.nodelist))
-
-        return x, y
-
     def init_fig(self):
-        x, y = self._get_density_curve(self.frames[-1], len(self.frames) - 1)
-        self.ax1.set_xlim([x[0], x[-1]])
-        self.ax1.set_ylim([0.0, y[-1]])
+        text_args = {
+            "x": 0.5,
+            "y": 1.05,
+            "size": plt.rcParams["axes.titlesize"],
+            "ha": "center",
+            "color": DARK_TITLE_COLOR if self.is_dark else LIGHT_TITLE_COLOR
+        }
+        ax0_title = self.ax0.text(s="Input Point Cloud", transform=self.ax0.transAxes, **text_args)
 
         for spine in self.ax0.spines.values():
             spine.set_visible(False)
 
-        for spine in self.ax1.spines.values():
-            spine.set_color(DARK_SPINE_COLOR if self.is_dark else LIGHT_SPINE_COLOR)
+        plt.tight_layout(pad=3.0)
 
-        self.ax1.xaxis.label.set_color(DARK_SPINE_COLOR if self.is_dark else LIGHT_SPINE_COLOR)
-        self.ax1.yaxis.label.set_color(DARK_SPINE_COLOR if self.is_dark else LIGHT_SPINE_COLOR)
-        self.ax1.tick_params(axis="x", which="both", bottom=False, top=False)
-        self.ax1.tick_params(axis="y", colors=DARK_SPINE_COLOR if self.is_dark else LIGHT_SPINE_COLOR)
-        plt.setp(self.ax1.get_xticklabels(), visible=False)
-        plt.tight_layout(pad=5.0)
+        self.artists = self.update(0)
+        self.artists.title = ax0_title
+
+        return self.artists
 
     def update(self, i):
         if self.artists:
             self.artists.node_paths.remove()
             self.artists.edge_segments.remove()
-            self.artists.ax0_title.remove()
-            self.artists.density_curve.remove()
-            self.ax1.lines.clear()
+            self.artists.title.remove()
 
         frame = self.frames[i]
-        ax0_title = self.ax0.text(
-            # s=f"Iteration #{frame.iter_num} (density={frame.density})",
-            s=f"Iteration #{frame.iter_num}",
+        title = self.ax0.text(
+            s=f"Iteration #{frame.iter_num} (density={frame.density})",
             transform=self.ax0.transAxes,
             x=0.5,
             y=1.05,
@@ -300,25 +268,11 @@ class Animation(object):
             width=0.75,
             ax=self.ax0
         )
-
         partial_edge_segments = generate_partial_edge_segments(frame.edge_segments, frame.edge_percentage)
         edge_segments.set_segments(partial_edge_segments)
 
-        ax1_title = self.ax1.text(
-            s=f"Density={frame.density}",
-            transform=self.ax1.transAxes,
-            x=0.5,
-            y=1.05,
-            size=plt.rcParams["axes.titlesize"],
-            ha="center",
-            color=DARK_TITLE_COLOR if self.is_dark else LIGHT_TITLE_COLOR
-        )
-        density_curve = self.ax1.plot(
-            *self._get_density_curve(frame, i),
-            color=DARK_NODE_COLOR if self.is_dark else LIGHT_NODE_COLOR
-        )[0]
+        self.artists = Artists(node_paths, edge_segments, title)
 
-        self.artists = Artists(node_paths, edge_segments, ax0_title, density_curve, ax1_title)
         return self.artists
 
     def show(self, duration=15, filename=None, dpi=None):
@@ -330,7 +284,7 @@ class Animation(object):
             self.fig,
             self.update,
             frames=num_frames,
-            init_func=self.init_fig,
+            # init_func=self.init_fig,
             interval=interval if not filename else fps,
             blit=False,
             repeat=False
