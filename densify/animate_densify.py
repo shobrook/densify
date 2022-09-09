@@ -13,8 +13,8 @@ from collections import namedtuple
 from math import ceil
 
 INIT_FRAME_MULTIPLIER = 50
-EDGE_FRAME_MULTIPLIER = 50 # No. of edge frames per densify iteration
-NODE_FRAME_MULTIPLIER = 25 # No. of frames to show for the addition of a point
+EDGE_FRAME_MULTIPLIER = 50
+NODE_FRAME_MULTIPLIER = 25
 FINAL_FRAME_MULTIPLIER = 50
 
 DARK_TITLE_COLOR = "white"
@@ -56,7 +56,8 @@ class Artists:
 
 
 def points_to_nodes(points, final_points):
-    return np.atleast_1d(np.argwhere(np.isin(final_points, points).all(axis=1)).squeeze())
+    return np.array([i for i, f_point in enumerate(final_points) for point in points if all(f_point == point)])
+    # return np.atleast_1d(np.argwhere(np.isin(final_points, points).all(axis=1)).squeeze()) # <- Fails due to floating point errors
 
 
 def create_final_point_cloud(init_points, iter_results):
@@ -261,8 +262,8 @@ class Animation(object):
 
     def show(self, duration=15, filename=None, dpi=None):
         num_frames = len(self.frames)
-        interval = (1000 * duration) / num_frames
-        fps = num_frames / duration
+        interval = ceil((1000 * duration) / num_frames)
+        fps = ceil(num_frames / duration)
 
         anim = FuncAnimation(
             self.fig,
@@ -277,7 +278,7 @@ class Animation(object):
         if not filename:
             plt.show()
         else:
-            anim.save(filename, fps=fps, dpi=dpi)
+            anim.save(filename, fps=30, dpi=dpi)
 
         return anim
 
@@ -291,14 +292,38 @@ def animate_densify(init_points, iter_results, dark=True, duration=15,
 if __name__ == "__main__":
     from densify import densify
 
-    points = np.array([[4.6, 6.5],
-                       [1.5, 4.1],
-                       [6.1, 5.0],
-                       [1.1, 2.9],
-                       [10.0, 5.0]])
-    new_points, iter_results = densify(points, radius=0.15)
+# (0,0), (4,0), (4,-3), (6,-3), (6,3), (3,5)
+    # points = np.array([[4.6, 6.5],
+    #                    [1.5, 4.1],
+    #                    [6.1, 5.0],
+    #                    [1.1, 2.9],
+    #                    [10.0, 5.0]])
+    init_points = np.array([[0, 0],
+                       [4, 0],
+                       [4, -3],
+                       [6, -3],
+                       [6, 3],
+                       [3, 5],
+                       [2, 1],
+                       [3, 3],
+                       [5, 0],
+                       [4, 1]])
+    hull = np.array([[0, 0],
+                       [4, 0],
+                       [4, -3],
+                       [6, -3],
+                       [6, 3],
+                       [3, 5]])
+    # points = hull.copy()
+    new_points, iter_results = densify(init_points, radius=0.5, exterior_hull=hull)
 
-    animate_densify(points, iter_results)
+    # print(points)
+    # print(iter_results[0].centroids)
+    # print()
 
-    # TODO: Implement Paul's suggestion
-    # TODO: Implement a color gradient for the nodes
+    # animate_densify(points, iter_results, dark=False, filename="test2.gif")
+    animate_densify(init_points, iter_results, dark=True)
+
+    # TODO: Implement shape enforcement
+    # TODO: Create a better example (start out with more points)
+    # TODO: Try the gradient idea
