@@ -33,14 +33,15 @@ def _is_point_left_of_segment(segment, point):
     """
 
     p0, p1 = segment
-    result = (p1[0] - p0[0]) * (point[1] - p0[1]) - (point[0] - p0[0]) * (p1[1] - p0[1])
+    result = (p1[0] - p0[0]) * (point[1] - p0[1])
+    result -= (point[0] - p0[0]) * (p1[1] - p0[1])
 
     if result > 0:
         return True
     elif result < 0:
         return False
 
-    return None
+    return True
 
 
 def _is_diagonal_outside_polygon(diagonal, vertices):
@@ -64,7 +65,7 @@ def _is_diagonal_outside_polygon(diagonal, vertices):
 
     midpoint = (diagonal[0] + diagonal[1]) / 2
     winding_num = 0
-    vertices = tuple(vertices[:]) + (vertices[0], ) # Close the loop
+    vertices = tuple(vertices[:]) + (vertices[0], )
     for i in range(len(vertices) - 1):
         v0, v1 = vertices[i], vertices[i + 1]
         edge = np.array([v0, v1])
