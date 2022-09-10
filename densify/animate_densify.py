@@ -19,11 +19,11 @@ FINAL_FRAME_MULTIPLIER = 50
 
 DARK_TITLE_COLOR = "white"
 LIGHT_TITLE_COLOR = (0.3, 0.3, 0.3, 1.0)
-DARK_NODE_COLOR = "white"
-LIGHT_NODE_COLOR = (0.3, 0.3, 0.3, 1.0)
+DARK_NODE_COLOR = (1.0, 1.0, 1.0)
+LIGHT_NODE_COLOR = (0.3, 0.3, 0.3)
 DARK_EDGE_COLOR = (0.6, 0.6, 0.6, 1.0)
 LIGHT_EDGE_COLOR = (0.6, 0.6, 0.6, 1.0)
-# RED = (0.69, 0.05, 0.18, 1.0)
+# RED = [0.69, 0.05, 0.18, 1.0]
 RED = "red"
 DARK_BACKGROUND = (0.05, 0.05, 0.05, 1.0)
 LIGHT_BACKGROUND = "white"
@@ -208,14 +208,22 @@ class Animation(object):
         # Animation frames
         self.frames = list(generate_frames(self.init_nodes, final_points, iter_results))
 
-    def _get_node_colors(self, frame):
-        num_init_nodes = len(self.init_nodes)
-        num_total_nodes = len(frame.nodelist)
+        # Create map of nodes to colors
+        self.node_to_color = self._create_node_to_color_map(init_points, iter_results)
 
-        node_colors = [DARK_NODE_COLOR if self.is_dark else LIGHT_NODE_COLOR for _ in range(num_init_nodes)]
-        node_colors += [RED for _ in range(num_init_nodes, num_total_nodes)]
+    def _create_node_to_color_map(self, init_points, iter_results):
+        num_iters = len(iter_results)
+        init_node_color = DARK_NODE_COLOR if self.is_dark else LIGHT_NODE_COLOR
 
-        return node_colors
+        colors = [init_node_color for _ in range(len(init_points))]
+        for i, iter_result in enumerate(iter_results):
+            # iter_color = [init_node_color[j] + (1 - (i / num_iters)) * (RED[j] - init_node_color[j]) for j in range(3)]
+            # iter_color = RED.copy()
+            # iter_color[-1] = 1.0 - ((i / num_iters) * 0.95)
+            iter_color = RED
+            colors.extend(iter_color for _ in range(len(iter_result.centroids)))
+
+        return colors
 
     def init_fig(self):
         for spine in self.ax0.spines.values():
@@ -240,7 +248,7 @@ class Animation(object):
         node_paths = nx.draw_networkx_nodes(
             self.final_graph,
             pos=nx.get_node_attributes(self.final_graph, "pos"),
-            node_color=self._get_node_colors(frame),
+            node_color=[self.node_to_color[i] for i in range(len(frame.nodelist))],
             node_size=15,
             nodelist=frame.nodelist,
             ax=self.ax0
@@ -298,32 +306,31 @@ if __name__ == "__main__":
     #                    [6.1, 5.0],
     #                    [1.1, 2.9],
     #                    [10.0, 5.0]])
+
     init_points = np.array([[0, 0],
-                       [4, 0],
-                       [4, -3],
-                       [6, -3],
-                       [6, 3],
-                       [3, 5],
-                       [2, 1],
-                       [3, 3],
-                       [5, 0],
-                       [4, 1]])
+                            [4, 0],
+                            [4, -3],
+                            [6, -3],
+                            [6, 3],
+                            [3, 5],
+                            [2, 1],
+                            [3, 3],
+                            [5, 0],
+                            [4, 1]])
     hull = np.array([[0, 0],
-                       [4, 0],
-                       [4, -3],
-                       [6, -3],
-                       [6, 3],
-                       [3, 5]])
+                     [4, 0],
+                     [4, -3],
+                     [6, -3],
+                     [6, 3],
+                     [3, 5]])
     # points = hull.copy()
-    new_points, iter_results = densify(init_points, radius=0.5, exterior_hull=hull)
+    new_points, iter_results = densify(init_points, radius=0.25, exterior_hull=hull)
 
     # print(points)
     # print(iter_results[0].centroids)
     # print()
 
-    # animate_densify(points, iter_results, dark=False, filename="test2.gif")
-    animate_densify(init_points, iter_results, dark=True)
+    animate_densify(init_points, iter_results, dark=True, filename="test3.gif")
+    # animate_densify(init_points, iter_results, dark=True)
 
-    # TODO: Implement shape enforcement
     # TODO: Create a better example (start out with more points)
-    # TODO: Try the gradient idea
