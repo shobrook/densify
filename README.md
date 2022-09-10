@@ -30,15 +30,45 @@ new_points, iter_results = densify(point_cloud, radius=0.15)
 
 The function returns `new_points`, a numpy array of the synthetic points, and `iter_results`, a list of algorithm outputs to plug into `visualize_densify`.
 
-<!--### Specifying a Shape-->
+### Constrained Point Generation
 
-<!--### Visualizing the Algorithm-->
+By default, `densify` acts within the convex hull of the point cloud and will not create points outside that boundary. But if the point cloud is non-convex, you can specify a boundary to constrain where points are generated. This should be defined as an ordered list of exterior points in the point cloud representing a simple polygon:
+
+```python
+point_cloud = np.array([[0, 0],
+                        [4, 0],
+                        [4, -3],
+                        [6, -3],
+                        [6, 3],
+                        [3, 5],
+                        [2, 1],
+                        [3, 3],
+                        [5, 0],
+                        [4, 1]])
+hull = np.array([[0, 0],
+                 [4, 0],
+                 [4, -3],
+                 [6, -3],
+                 [6, 3],
+                 [3, 5]])
+new_points, iter_results = densify(point_cloud, radis=0.15, exterior_hull=hull)
+```
+
+### Visualizing Point Generation
+
+`densify` lets you visualize the point generation process for 2D point clouds. Simply plug the `point_cloud` and `iter_results` objects into `animate_densify`:
+
+```python
+from densify import animate_densify
+
+animate_densify(point_cloud, iter_results, dark=True, filename="ani.gif")
+```
 
 ## How it Works
 
 `densify` computes a [Delaunay triangulation](https://en.wikipedia.org/wiki/Delaunay_triangulation) of the point cloud and creates synthetic points from the centroids of each simplex in the triangulation. These points are added to the cloud, and the process is repeated recursively until no new points can be created.
 
-<!--TODO: Explain how the given shape is enforced-->
+If a boundary is given, `densify` enforces it by using the [winding number algorithm](https://en.wikipedia.org/wiki/Point_in_polygon#Winding_number_algorithm) to identify simplices that contain edges outside of the boundary, and then dropping them.
 
 # Authors
 
