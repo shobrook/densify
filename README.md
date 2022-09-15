@@ -32,7 +32,7 @@ The function returns `new_points`, a numpy array of the synthetic points, and `i
 
 ### Constrained Point Generation
 
-By default, `densify` acts within the convex hull of the point cloud and will not create points outside that boundary. But if the point cloud is non-convex, you can specify a boundary to constrain where points are generated. This should be defined as an ordered list of exterior points in the point cloud representing a simple polygon:
+By default, `densify` acts within the [convex hull](https://en.wikipedia.org/wiki/Convex_hull) of the point cloud and will not create points outside that boundary. But if the point cloud is non-convex, you can define a boundary to generate points within. To do this, pass in a list of points in the cloud representing the boundary:
 
 ```python
 point_cloud = np.array([[0, 0],
@@ -53,6 +53,8 @@ hull = np.array([[0, 0],
                  [3, 5]])
 new_points, iter_results = densify(point_cloud, radis=0.15, exterior_hull=hull)
 ```
+
+Note that these points must define a _simple_ polygon that encloses _all_ the points in the cloud.
 
 ### Visualizing Point Generation
 
