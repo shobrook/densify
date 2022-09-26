@@ -38,10 +38,8 @@ def _is_point_left_of_segment(segment, point):
 
     if result > 0:
         return True
-    elif result < 0:
-        return False
 
-    return True
+    return False
 
 
 def _is_diagonal_outside_polygon(diagonal, vertices):
