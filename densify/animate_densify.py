@@ -291,46 +291,7 @@ class Animation(object):
         return anim
 
 
-def animate_densify(init_points, iter_results, dark=True, duration=15,
+def animate_densify(init_points, iter_results, dark=True, duration=12,
                     filename=None, dpi=None):
     anim = Animation(init_points, iter_results, dark)
     return anim.show(duration, filename, dpi)
-
-
-if __name__ == "__main__":
-    from densify import densify
-
-# (0,0), (4,0), (4,-3), (6,-3), (6,3), (3,5)
-    # points = np.array([[4.6, 6.5],
-    #                    [1.5, 4.1],
-    #                    [6.1, 5.0],
-    #                    [1.1, 2.9],
-    #                    [10.0, 5.0]])
-
-    init_points = np.array([[0, 0],
-                            [4, 0],
-                            [4, -3],
-                            [6, -3],
-                            [6, 3],
-                            [3, 5],
-                            [2, 1],
-                            [3, 3],
-                            [5, 0],
-                            [4, 1]])
-    hull = np.array([[0, 0],
-                     [4, 0],
-                     [4, -3],
-                     [6, -3],
-                     [6, 3],
-                     [3, 5]])
-    # points = hull.copy()
-    new_points, iter_results = densify(init_points, radius=0.25, exterior_hull=hull)
-
-    # print(points)
-    # print(iter_results[0].centroids)
-    # print()
-
-    animate_densify(init_points, iter_results, dark=True, filename="test3.gif")
-    # animate_densify(init_points, iter_results, dark=True)
-
-    # TODO: Create a better example (start out with more points)
