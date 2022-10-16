@@ -1,6 +1,6 @@
 # densify
 
-`densify` is an algorithm for [oversampling](https://en.wikipedia.org/wiki/Oversampling_and_undersampling_in_data_analysis) point clouds. It creates synthetic data points that "fill the gaps" in the cloud, making it more dense. This can be a useful [technique for reducing overfitting](https://en.wikipedia.org/wiki/Regularization_(mathematics)) when training machine learning models on point cloud datasets.
+`densify` is an algorithm for [oversampling](https://en.wikipedia.org/wiki/Oversampling_and_undersampling_in_data_analysis#Augmentation) point clouds. It creates synthetic data points that "fill the gaps" in the cloud, making it more dense. This can be a useful [technique for reducing overfitting](https://en.wikipedia.org/wiki/Regularization_(mathematics)) when training machine learning models on point cloud datasets.
 
 ![Demo](demo.gif)
 
